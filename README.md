@@ -146,11 +146,11 @@ bf400000-c5ffffff : PCI Bus 0000:6c
       bf400000-bf403fff : vfio-pci
 ```
 
-puis lancer un script bash sur le host : 
+puis lancer un script bash sur le host (scripts/doorbell.sh) : 
 ```bash
 #!/bin/bash
 BASE=0xbf400000
-DBELL=$((BASE + 0x1000)) # premier doorbell
+DBELL=$((BASE + 0x100C))
 while true; do
     VAL=$(sudo busybox devmem $DBELL 32)
     echo "$(date +%s) $VAL"
@@ -162,3 +162,27 @@ et faire un gros dd sur la vm :
 ```bash
 sudo dd if=/dev/nvme0n1 of=/tmp/testfile bs=1G count=10 oflag=direct
 ```
+
+## Analyse
+Le script (script/doorbell.sh) lit en boucle BAR0 + 0x100C ("Completion Queue Head Doorbell").
+
+Pendant le dd dans la VM :
+- La valeur de ce registre change régulièrement.
+- Les changements s’arrêtent pile quand le dd se termine.
+
+### Explication
+
+BAR0 (0xbf400000) est la fenêtre MMIO exposée par la puce NVMe.
+- Quand le guest écrit dans son BAR0 (via son driver VFIO/IOMMU), l’accès traverse :
+  - La traduction d’adresse PCIe → IOMMU
+  - Arrive au contrôleur NVMe
+- Mais le mapping BAR0 reste visible dans l’espace physique host (/proc/iomem → bf400000-bf403fff).
+
+Donc le même registre matériel est accessible simultanément par :
+- Le CPU du guest (via passthrough et IOMMU).
+- Le CPU du host (via /dev/mem, devmem, ioremap…).
+
+L'expérience démontre que :
+- Les registres NVMe (BAR0) restent accessibles sur le host même en passthrough.
+- Le host peut observer en temps réel l’activité du SSD utilisé par la VM.
+- Les doorbells s’animent exactement pendant la durée des I/O, ce qui prouve qu'on observe les vraies transactions NVMe du gues
