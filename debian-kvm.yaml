@@ -1,0 +1,26 @@
+---
+name: debian-kvm
+version: 4
+arch: x86_64
+alias: debian12-x64-nfs-kvm
+description: KVM on debian 12 (bookworm) for x86_64 - nfs
+author: Niels Terese
+visibility: shared
+destructive: false
+os: linux
+image:
+  file: http://public.grenoble.grid5000.fr/~nterese/img/debian_kvm.tar.zst
+  kind: tar
+  compression: zstd
+postinstalls:
+- archive: server:///grid5000/postinstalls/g5k-postinstall.tgz
+  compression: gzip
+  script: g5k-postinstall --net debian --net hpc --fstab nfs --restrict-user current
+    --disk-aliases
+boot:
+  kernel: "/boot/vmlinuz-6.12.22"
+  initrd: "/boot/initrd.img-6.12.22"
+  kernel_params: ''
+filesystem: ext4
+partition_type: 131
+multipart: false

@@ -3,6 +3,7 @@
 Ce dépôt regroupe des expérimentations de recherche sur le passthrough PCIe de SSD NVMe via VFIO/IOMMU. L’objectif principal est de vérifier si des observables côté hôte peuvent encore être récupérés sur un périphérique PCIe (NVMe) alors qu’il est en passthrough sur une machine virtuelle, et d’en analyser les implications en matière de sécurité.
 
 ## Configuration + Création image
+### Sur le host
 Réservation sur yeti : 
 ```bash
 oarsub -t exotic -t deploy -p yeti -I
@@ -50,7 +51,23 @@ echo "options vfio-pci ids=144d:a821" | sudo tee /etc/modprobe.d/vfio.conf
 sudo reboot
 ```
 
-Modification de la VM :
+### Création de la VM :
+```bash
+sudo qemu-img create -f qcow2 /tmp/debian-12.qcow2 20G 
+sudo virsh net-start default
+sudo virt-install \
+  --name debian12-vm \
+  --memory 2048 \
+  --vcpus 2 \
+  --disk path=/tmp/debian-12.qcow2,format=qcow2 \
+  --location 'http://deb.debian.org/debian/dists/bookworm/main/installer-amd64/' \
+  --os-variant debian11 \
+  --network network=default \
+  --graphics none \
+  --extra-args 'console=ttyS0,115200n8 serial'
+```
+
+### Modification de la VM :
 
 Si la VM tourne : sudo virsh shutdown debian12-vm
 
@@ -72,7 +89,7 @@ sudo virsh start debian12-vm
 sudo virsh console debian12-vm
 ```
 
-Vérification du passthrough, sur le host : 
+### Vérification du passthrough, sur le host : 
 ```bash
 lspci -nnk -s 6d:00.0
 6d:00.0 Non-Volatile memory controller [0108]: Samsung Electronics Co Ltd NVMe SSD Controller 172X [144d:a821] (rev 01)
@@ -91,7 +108,7 @@ sda       8:0    0 447.1G  0 disk
 nvme0n1 259:1    0   1.5T  0 disk
 ```
 
-Vérification du passthrough dans la VM : 
+### Vérification du passthrough dans la VM : 
 ```bash
 lsblk
 NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
@@ -110,7 +127,7 @@ une fois qu’on a un accès sur yeti :
 ```bash
 sudo update-grub
 sudo reboot
-sudo debian12-vm.xml /etc/libvirt/qemu/
+sudo cp debian12-vm.xml /etc/libvirt/qemu/
 cp debian-12.qcow2 /tmp
 sudo virsh net-start default
 sudo virsh start debian12-vm
@@ -118,8 +135,8 @@ sudo virsh start debian12-vm
 
 sur un nouveau terminal pour yeti : 
 sudo virsh console debian12-vm
-login : vm
-mdp : vm
+**login : vm**
+**mdp : vm**
 
 dans le host, faire un cat /proc/iomem en sudo : 
 ```
